@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta charset="UTF-8">
+    <title>Assignment 4</title>
+    <style>
+        div.tooltip {
+            position: absolute;
+            padding: .5rem;
+            background: black;
+            color: #cc9bec;
+            border: 1px solid black;
+            border-radius: 8px;
+            pointer-events: none;
+            font-size: 1rem;
+        }
+
+        div.style{
+            font-family: Arial;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="style">
+        <h2 font-family: 'Arial'> Covid-19 Clusters in Singapore</h2>
+        <label class="radio">
+            <input type="radio" value="1" id="r1" checked="checked">
+            Gender
+        </label>
+        <label class="radio">
+            <input type="radio" value="2" id="r2">
+            Vaccination
+        </label>
+    </div>
+    <svg></svg>
+    <div class="tooltip"></div>
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.6.0/jquery.min.js"></script>
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/d3-legend/2.24.0/d3-legend.js"></script>
+    <script>
+
+        let width = 800, height = 400
+
+        let svg = d3.select("svg")
+            .attr("viewBox", "0 0 " + width + " " + height)
+
+
+        // Load external data
+        links = "https://chi-loong.github.io/CSC3007/assignments/links-sample.json"
+        cases = "https://chi-loong.github.io/CSC3007/assignments/cases-sample.json"
+        Promise.all([d3.json(links), d3.json(cases)]).then(data => {
+
+            // Data preprocessing
+            data[0].forEach(e => {
+                e.source = e.infector;
+                e.target = e.infectee;
+            });
+
+            let gScale = d3.scaleOrdinal()
+                .domain(["male", "female"])
+                .range(["lightblue", "pink"]);
+
+            let node = svg.append("g")
+                .attr("id", "nodes")
+                .selectAll("circle")
+                .data(data[1])
+                .enter()
+                .append("circle")
+                .attr("r", 20)
+                .style("fill", d => {
+                    return gScale(d.gender);
+                })
+
+                .call(d3.drag()
+                    .on("start", dragstarted)
+                    .on("drag", dragged)
+                    .on("end", dragended))
+
+                // mouse over
+                .on("mouseover", (event, d) => {
+                    d3.select(".tooltip")
+                        .html("Age: " + d.age + "<br>Gender: " + d.gender + "<br>Occupation: " + d.occupation + "<br>Vaccinated: " + d.vaccinated)
+                        .style("left", (event.pageX) + "px")
+                        .style("top", (event.pageY) + "px")
+
+                    d3.select(event.currentTarget)
+                        .style("stroke", "yellow")
+                        .style("stroke-width", "3");
+                })
+
+                // mouse out
+                .on("mouseout", (event, d) => {
+                    d3.select(".tooltip")
+                        .text("")
+                        .style("border", "1px none")
+
+                    d3.select(event.currentTarget)
+                        .style("stroke", "#fff")
+                        .style("stroke-width", "0");
+                })
+
+            svg.append('defs').append('marker')
+                .attr('id', 'arrowhead')
+                .attr('viewBox', '-0 -5 10 10')
+                .attr('refX', 35)
+                .attr('refY', 0)
+                .attr('orient', 'auto')
+                .attr('markerWidth', 10)
+                .attr('markerHeight', 10)
+                .attr('orient', 'auto')
+                .append('path')
+                .attr('d', 'M 0,-5 L 10 ,0 L 0,5')
+                .attr('fill', 'black')
+
+            function dragstarted(event, d) {
+                if (!event.active) simulation.alphaTarget(0.3).restart();
+                d.fx = d.x;
+                d.fy = d.y;
+            }
+
+            function dragged(event, d) {
+                d.fx = event.x;
+                d.fy = event.y;
+            }
+
+            function dragended(event, d) {
+                if (!event.active) simulation.alphaTarget(0);
+                d.fx = null;
+                d.fy = null;
+            }
+
+            let linkpath = svg.append("g")
+                .attr("id", "links")
+                .selectAll("path")
+                .data(data[0])
+                .enter()
+                .append("path")
+                .attr("fill", "none")
+                .attr("stroke", "black")
+                .attr('marker-end', 'url(#arrowhead)');
+
+            let image = svg.append("g")
+                .selectAll("image")
+                .data(data[1])
+                .enter()
+                .append("image")
+                .attr("xlink:href", d => {
+                    if (d.gender == "male") return "male.svg"; else return "female.svg";
+                })
+                .attr("width", 15)
+                .attr("height", 15)
+                .attr("pointer-events", "none");
+
+            let simulation = d3.forceSimulation()
+                .nodes(data[1])
+                .force("center", d3.forceCenter(width / 2, height / 2))
+                .force("charge", d3.forceManyBody().strength(30))
+                .force("link", d3.forceLink(data[0])
+                    .id(d => d.id)
+                    .distance(40)
+                    .strength(0.5)
+                )
+                .force("collide", d3.forceCollide().strength(0.5).radius(40))
+                .on("tick", d => {
+                    node
+                        .attr("cx", d => d.x)
+                        .attr("cy", d => d.y);
+
+                    linkpath
+                        .attr("d", d => "M" + d.source.x + "," + d.source.y + " " + d.target.x + "," + d.target.y);
+
+                    image
+                        .attr("x", d => d.x - 15 / 2)
+                        .attr("y", d => d.y - 15 / 2);
+                });
+
+            // Legend
+            var legend_labels = ["male", "female"];
+            var legend = svg.selectAll("g.legend")
+                .data([0, 1])
+                .enter().append("g")
+                .attr("class", "legend");
+                
+
+            // Buttons
+            $("#r1").click(function () {
+                var myColor = d3.scaleOrdinal().domain(['male', 'female'])
+                    .range(["steelblue", "pink"])
+                node.style("fill", function (d) { return myColor(d['gender']) })
+
+                var legend = d3.legendColor().scale(myColor);
+                svg.select(".legend")
+                    .call(legend);
+            });
+            $("#r2").click(function () {
+                var vColor = d3.scaleOrdinal().domain(['no', 'partial (1 dose)', 'yes (2 doses)'])
+                    .range(["red", "blue", "lightgreen"])
+                node.style("fill", function (d) { return vColor(d['vaccinated']) })
+                var legend = d3.legendColor().scale(vColor);
+                svg.select(".legend")
+                    .call(legend);
+            })
+        })
+    </script>
+
+</body>
+
+</html>
